@@ -4,10 +4,12 @@ import android.app.Fragment;
 import android.graphics.Color;
 import android.location.Location;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.f8full.sample.directionsonmapv2withretrofit.api.GoogleMapsDirectionsApi;
@@ -16,6 +18,7 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -56,6 +59,12 @@ public class DirectionsMapFragment extends Fragment implements
             .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
 
+    private Button mButtonGo;
+    private TextView mTextDistance;
+    private TextView mTextDuration;
+    private ProgressBar mProgressBar;
+
+
 
     public DirectionsMapFragment() {
     }
@@ -65,6 +74,22 @@ public class DirectionsMapFragment extends Fragment implements
                              Bundle savedInstanceState) {
 
         View inflatedView = inflater.inflate(R.layout.fragment_map, container, false);
+
+        mButtonGo = (Button)inflatedView.findViewById(R.id.button);
+        mButtonGo.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mMapInterface.clear();
+                mTextDistance.setText("");
+                mTextDuration.setText("");
+                mButtonGo.setEnabled(false);
+            }
+        });
+        mTextDistance = (TextView)inflatedView.findViewById(R.id.trip_distance);
+        mTextDuration = (TextView)inflatedView.findViewById(R.id.trip_time);
+        mProgressBar = (ProgressBar)inflatedView.findViewById(R.id.progressBar);
+        mTextDistance.setTextColor(Color.LTGRAY);
+        mTextDuration.setTextColor(Color.LTGRAY);
 
         if(mMapInterface == null)
             ((MapFragment) getActivity().getFragmentManager().findFragmentById(R.id.map)).getMapAsync(this);
@@ -96,7 +121,6 @@ public class DirectionsMapFragment extends Fragment implements
     public void onMapReady(GoogleMap googleMap) {
         mMapInterface = googleMap;
         mMapInterface.setMyLocationEnabled(true);
-        mMapInterface.setOnMapLongClickListener(this);
     }
 
     @Override
@@ -115,7 +139,22 @@ public class DirectionsMapFragment extends Fragment implements
 
     @Override
     public void onLocationChanged(Location location) {
-        mUserLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+
+        LatLng newUserLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+
+        if (mUserLatLng == null)
+        {
+            mMapInterface.setOnMapLongClickListener(this);
+            mMapInterface.animateCamera(CameraUpdateFactory.newLatLngZoom(newUserLatLng, 15));
+
+            Toast.makeText(getActivity().getApplicationContext(), "Long press to set destination", Toast.LENGTH_LONG).show();
+        }
+
+
+
+        mUserLatLng = newUserLatLng;
+
+
 
     }
 
@@ -129,7 +168,12 @@ public class DirectionsMapFragment extends Fragment implements
     @Override
     public void onMapLongClick(final LatLng latLng) {
 
-        if (mUserLatLng != null) {
+        if (mUserLatLng != null && mProgressBar.getVisibility() != View.VISIBLE) {
+
+            mMapInterface.clear();
+            mTextDistance.setText("");
+            mTextDuration.setText("");
+            mButtonGo.setEnabled(false);
 
             Map<String, String> UrlParams = new HashMap<>();
             UrlParams.put("origin", mUserLatLng.latitude + "," + mUserLatLng.longitude);
@@ -140,37 +184,54 @@ public class DirectionsMapFragment extends Fragment implements
             GoogleMapsDirectionsApi api = ((RootApplication) getActivity().getApplication()).getGoogleMapsDirectionsApi();
 
             final Call<GuidanceAnswerRoot> call = api.getDirections(UrlParams);
+            mProgressBar.setVisibility(View.VISIBLE);
             call.enqueue(new Callback<GuidanceAnswerRoot>() {
                 @Override
                 public void onResponse(Response<GuidanceAnswerRoot> response) {
                     // Get result Repo from response.body()
 
+                    mProgressBar.setVisibility(View.GONE);
+
                     GuidanceAnswerRoot answer = response.body();
 
-                    String encodedPoints = answer.routes.get(0).overview_polyline.points;
-                    List<LatLng> latLngs = PolyUtil.decode(encodedPoints);
+                    if (!answer.routes.isEmpty()) {
 
-                    mMapInterface.clear();
+                        String encodedPoints = answer.routes.get(0).overview_polyline.points;
+                        List<LatLng> latLngs = PolyUtil.decode(encodedPoints);
 
-                    Log.d("MYTAG", "origin " + mUserLatLng.latitude + "," + mUserLatLng.longitude + " _ " + "destination " + latLng.latitude + "," + latLng.longitude );
+
+                        //Log.d("MYTAG", "origin " + mUserLatLng.latitude + "," + mUserLatLng.longitude + " _ " + "destination " + latLng.latitude + "," + latLng.longitude );
 
 //Add the polyline to map
-                    mMapInterface.addPolyline(new PolylineOptions()
-                            .addAll(latLngs)
-                            .width(5)
-                            .color(Color.BLUE));
+                        mMapInterface.addPolyline(new PolylineOptions()
+                                .addAll(latLngs)
+                                .width(5)
+                                .color(Color.rgb(255,64,129)));
 
 //See BudgetTrackDetailsFragment
 
 //display summaring Toast
-                    if (answer.routes.get(0).legs.size() == 1)  //One leg trip, directly use data as string in UI
+                        if (answer.routes.get(0).legs.size() == 1)  //One leg trip, directly use data as string in UI
+                        {
+                            mTextDistance.setText(answer.routes.get(0).legs.get(0).distance.text);
+                            mTextDuration.setText(answer.routes.get(0).legs.get(0).duration.text);
+                            //Toast.makeText(getActivity().getApplicationContext(), answer.routes.get(0).legs.get(0).distance.text + "  " + answer.routes.get(0).legs.get(0).duration.text, Toast.LENGTH_LONG).show();
+                            mButtonGo.setEnabled(true);
+                        }
+                    }
+                    else
                     {
-                        Toast.makeText(getActivity().getApplicationContext(), answer.routes.get(0).legs.get(0).distance.text + "  " + answer.routes.get(0).legs.get(0).duration.text, Toast.LENGTH_LONG).show();
+                        Toast.makeText(getActivity().getApplicationContext(), "No route!", Toast.LENGTH_SHORT).show();
+
                     }
                 }
 
                 @Override
                 public void onFailure(Throwable t) {
+
+                    Toast.makeText(getActivity().getApplicationContext(), "Couldn't retrieve directions", Toast.LENGTH_SHORT).show();
+
+                    mProgressBar.setVisibility(View.GONE);
 
                 }
             });
