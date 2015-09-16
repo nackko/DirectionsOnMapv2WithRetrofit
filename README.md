@@ -18,4 +18,4 @@ From
 
 
 [Doc]:https://developers.google.com/maps/documentation/directions/intro
-[SampleURL]https://maps.googleapis.com/maps/api/directions/json?origin=45.5290807503689,-73.58135472983122&destination=45.5348227237613,-73.57860814779997&sensor=false&mode=bicycling
+[SampleURL]:https://maps.googleapis.com/maps/api/directions/json?origin=45.5290807503689,-73.58135472983122&destination=45.5348227237613,-73.57860814779997&sensor=false&mode=bicycling
